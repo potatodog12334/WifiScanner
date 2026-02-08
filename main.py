@@ -3,18 +3,16 @@ import socket
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from discovery import expand_targets
-from ports import detect_service
+from ports import detect_service, ssh_reachable, rdp_reachable
 from rate import rate_limit
 from mitre import discovery_metadata
 from window import utc_timestamp
-from output import print_json
+from output import stream_host, final_output, progress
 
 
 def tcp_scan(host, port, timeout=1.0):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(timeout)
     try:
-        sock.connect((host, port))
+        sock = socket.create_connection((host, port), timeout=timeout)
         sock.close()
         return True
     except Exception:
@@ -23,14 +21,20 @@ def tcp_scan(host, port, timeout=1.0):
 
 def scan_host(host, ports, delay, verbose):
     open_ports = []
+    reachability = {}
 
     for port in ports:
         if tcp_scan(host, port):
             service = detect_service(port)
-            open_ports.append({
-                "port": port,
-                "service": service
-            })
+            entry = {"port": port, "service": service}
+
+            if port == 22:
+                entry["ssh_reachable"] = ssh_reachable(host)
+            if port == 3389:
+                entry["rdp_reachable"] = rdp_reachable(host)
+
+            open_ports.append(entry)
+
             if verbose:
                 print(f"[+] {host}:{port} open ({service})")
         else:
@@ -55,13 +59,13 @@ def main():
     parser.add_argument("--rate-limit", type=float, default=0.2)
     parser.add_argument("--workers", type=int, default=20)
     parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--stream", action="store_true")
 
     args = parser.parse_args()
 
     ports = [int(p) for p in args.ports.split(",")]
     targets = expand_targets(args.subnets)
-
-    print(f"[i] Targets expanded: {len(targets)} hosts")
+    total = len(targets)
 
     results = {
         "metadata": {
@@ -74,6 +78,8 @@ def main():
         "hosts": {}
     }
 
+    completed = 0
+
     with ThreadPoolExecutor(max_workers=args.workers) as executor:
         futures = [
             executor.submit(scan_host, h, ports, args.rate_limit, args.verbose)
@@ -83,9 +89,15 @@ def main():
         for future in as_completed(futures):
             host, data = future.result()
             results["hosts"][host] = data
-            print(f"[✓] Completed {host}", flush=True)
+            completed += 1
 
-    print_json(results)
+            progress(completed, total)
+
+            if args.stream:
+                stream_host(host, data)
+
+    if not args.stream:
+        final_output(results)
 
 
 if __name__ == "__main__":
