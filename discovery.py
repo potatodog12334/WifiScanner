@@ -28,7 +28,9 @@ def discover_hosts(subnets, limiter, window):
 
     for subnet in subnets:
         net = ipaddress.IPv4Network(subnet, strict=False)
-
+        if"/" not in subnets:
+            print(f"[!] Treating {subnet} as single host (/32)")
+            subnet = f"{subnet}/32"
         for ip in net:
             if not within_window(*window):
                 return hosts
