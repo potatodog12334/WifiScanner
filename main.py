@@ -17,6 +17,12 @@ def main():
     parser.add_argument("--rate", type=float, default=0.2)
     parser.add_argument("--window", default="00:00-23:59")
     parser.add_argument("--engagement", default="UNSPECIFIED")
+    parser.add_argument(
+    "--verbose",
+    action="store_true",
+    help="Show scan progress"
+    )
+
 
     args = parser.parse_args()
 
@@ -38,7 +44,8 @@ def main():
             ip,
             ports,
             args.timeout,
-            limiter
+            limiter,
+            args.verbose
         )
 
     emit(
