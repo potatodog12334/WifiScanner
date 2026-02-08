@@ -7,7 +7,7 @@ from ports import detect_service
 from rate import rate_limit
 from mitre import discovery_metadata
 from window import utc_timestamp
-from output import print_summary, print_json
+from output import print_summary
 
 
 def tcp_scan(host, port, timeout=1.0):
@@ -37,7 +37,6 @@ def scan_host(host, ports, delay, verbose):
     rate_limit(delay)
 
     return host, {
-        "source": "active",
         "hostname": host,
         "ports": open_ports
     }
@@ -47,13 +46,20 @@ def main():
     parser = argparse.ArgumentParser(
         description="Authorized Network Discovery Scanner"
     )
+
     parser.add_argument("--subnets", required=True)
     parser.add_argument("--ports", default="22,80,443,3389")
     parser.add_argument("--rate-limit", type=float, default=0.2)
     parser.add_argument("--workers", type=int, default=20)
     parser.add_argument("--verbose", action="store_true")
-    parser.add_argument("--json", action="store_true",
-                        help="Also print full JSON output")
+
+    # 👇 output control flags
+    parser.add_argument("--show-all", action="store_true",
+                        help="Show all scanned IPs")
+    parser.add_argument("--only-active", action="store_true",
+                        help="Show only active IPs (default)")
+    parser.add_argument("--open-ports", action="store_true",
+                        help="Show only hosts with open ports")
 
     args = parser.parse_args()
 
@@ -62,9 +68,7 @@ def main():
 
     results = {
         "metadata": {
-            "engagement": "UNSPECIFIED",
             "timestamp": utc_timestamp(),
-            "scan_window": "00:00-23:59",
             "rate_limit_seconds": args.rate_limit,
             "mitre_attack": discovery_metadata()
         },
@@ -81,11 +85,12 @@ def main():
             host, data = future.result()
             results["hosts"][host] = data
 
-    # 👇 This is the important part
-    print_summary(results)
-
-    if args.json:
-        print_json(results)
+    print_summary(
+        results,
+        show_all=args.show_all,
+        only_active=args.only_active,
+        open_ports=args.open_ports
+    )
 
 
 if __name__ == "__main__":
