@@ -1,11 +1,11 @@
-from datetime import datetime, time as dtime
+from datetime import datetime
 
-def parse_window(window):
-    start, end = window.split("-")
-    h1, m1 = map(int, start.split(":"))
-    h2, m2 = map(int, end.split(":"))
-    return dtime(h1, m1), dtime(h2, m2)
+def in_scan_window(window="00:00-23:59"):
+    """
+    Placeholder for future enforcement.
+    Always returns True for now.
+    """
+    return True
 
-def within_window(start, end):
-    now = datetime.now().time()
-    return start <= now <= end
+def utc_timestamp():
+    return datetime.utcnow().isoformat() + "Z"
