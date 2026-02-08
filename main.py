@@ -11,6 +11,9 @@ from window import utc_timestamp
 from output import print_summary
 
 
+COMMON_PORTS = [22, 80, 443, 3389]
+
+
 def ping_host(host):
     try:
         result = subprocess.run(
@@ -25,19 +28,18 @@ def ping_host(host):
 
 def tcp_scan(host, port, timeout=1.0):
     try:
-        sock = socket.create_connection((host, port), timeout=timeout)
-        sock.close()
-        return True
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
     except Exception:
         return False
 
 
 def scan_host(host, ports, delay, scan_ports, verbose):
-    is_active = ping_host(host)
+    active = ping_host(host)
 
-    if not is_active:
+    if not active:
         if verbose:
-            print(f"[-] {host} inactive (no ping)")
+            print(f"[-] {host} inactive")
         return host, {
             "active": False,
             "ports": []
@@ -51,17 +53,18 @@ def scan_host(host, ports, delay, scan_ports, verbose):
     if scan_ports:
         for port in ports:
             if tcp_scan(host, port):
+                service = detect_service(port)
                 open_ports.append({
                     "port": port,
-                    "service": detect_service(port)
+                    "service": service
                 })
                 if verbose:
-                    print(f"    [+] {host}:{port} open")
+                    print(f"    [+] {host}:{port} open ({service})")
             else:
                 if verbose:
                     print(f"    [-] {host}:{port} closed")
 
-        rate_limit(delay)
+            rate_limit(delay)
 
     return host, {
         "active": True,
@@ -71,35 +74,34 @@ def scan_host(host, ports, delay, scan_ports, verbose):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Authorized Network Discovery Scanner"
+        description="Authorized Network Discovery Tool"
     )
 
     parser.add_argument("--subnets", required=True)
-    parser.add_argument("--ports", default="22,80,443,3389")
     parser.add_argument("--rate-limit", type=float, default=0.2)
     parser.add_argument("--workers", type=int, default=20)
     parser.add_argument("--verbose", action="store_true")
 
     parser.add_argument(
-        "--scan-ports",
+        "--scan-active",
         action="store_true",
-        help="Scan selected ports on active hosts"
+        help="Scan common ports on active hosts"
     )
 
     parser.add_argument(
         "--scan-all-ports",
         action="store_true",
-        help="Scan ALL 1–65535 ports on active hosts (slow)"
+        help="Scan all 1–65535 ports on active hosts"
     )
 
     args = parser.parse_args()
 
-    # Decide port list
+    # Decide scan mode
     if args.scan_all_ports:
         ports = list(range(1, 65536))
         scan_ports = True
-    elif args.scan_ports:
-        ports = [int(p) for p in args.ports.split(",")]
+    elif args.scan_active:
+        ports = COMMON_PORTS
         scan_ports = True
     else:
         ports = []
@@ -111,7 +113,7 @@ def main():
         "metadata": {
             "timestamp": utc_timestamp(),
             "mitre_attack": discovery_metadata(),
-            "scan_ports": scan_ports,
+            "scan_active": args.scan_active,
             "scan_all_ports": args.scan_all_ports
         },
         "hosts": {}
