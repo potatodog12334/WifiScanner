@@ -1,36 +1,35 @@
-def print_summary(results, show_all=False, only_active=False, open_ports=False):
+def print_summary(results):
     hosts = results.get("hosts", {})
 
-    # classify
-    all_hosts = hosts
     active_hosts = {
         ip: data for ip, data in hosts.items()
+        if data.get("active")
+    }
+
+    hosts_with_ports = {
+        ip: data for ip, data in active_hosts.items()
         if data.get("ports")
     }
 
-    if open_ports:
-        display_hosts = active_hosts
-        title = "Hosts with Open Ports"
-    elif show_all:
-        display_hosts = all_hosts
-        title = "All Scanned Hosts"
-    else:
-        # default behavior
-        display_hosts = active_hosts
-        title = "Active Hosts"
-
     print("\nScan Summary")
     print("=" * 12)
-    print(f"\n{title} ({len(display_hosts)}):")
 
-    if not display_hosts:
+    print(f"\nActive hosts ({len(active_hosts)}):")
+    if not active_hosts:
         print("  (none)")
-        return
+    else:
+        for ip in sorted(active_hosts):
+            ports = active_hosts[ip]["ports"]
+            if ports:
+                port_list = ", ".join(str(p["port"]) for p in ports)
+                print(f"  - {ip:<15} [{port_list}]")
+            else:
+                print(f"  - {ip}")
 
-    for ip, data in sorted(display_hosts.items()):
-        ports = data.get("ports", [])
-        if ports:
-            port_list = ", ".join(str(p["port"]) for p in ports)
-            print(f"  - {ip:<15} [{port_list}]")
+    if results["metadata"].get("scan_ports"):
+        print(f"\nHosts with open ports ({len(hosts_with_ports)}):")
+        if not hosts_with_ports:
+            print("  (none)")
         else:
-            print(f"  - {ip}")
+            for ip in sorted(hosts_with_ports):
+                print(f"  - {ip}")
