@@ -12,10 +12,6 @@ from output import print_summary
 
 
 def ping_host(host):
-    """
-    Returns True if host responds to a single ICMP ping.
-    Linux-compatible (Chromebook Crostini).
-    """
     try:
         result = subprocess.run(
             ["ping", "-c", "1", "-W", "1", host],
@@ -37,7 +33,6 @@ def tcp_scan(host, port, timeout=1.0):
 
 
 def scan_host(host, ports, delay, scan_ports, verbose):
-    # Step 1: Ping
     is_active = ping_host(host)
 
     if not is_active:
@@ -49,11 +44,10 @@ def scan_host(host, ports, delay, scan_ports, verbose):
         }
 
     if verbose:
-        print(f"[+] {host} active (ping reply)")
+        print(f"[+] {host} active")
 
     open_ports = []
 
-    # Step 2: Optional port scan
     if scan_ports:
         for port in ports:
             if tcp_scan(host, port):
@@ -86,23 +80,39 @@ def main():
     parser.add_argument("--workers", type=int, default=20)
     parser.add_argument("--verbose", action="store_true")
 
-    # 👇 new, clean switch
     parser.add_argument(
         "--scan-ports",
         action="store_true",
-        help="Scan ports on active hosts"
+        help="Scan selected ports on active hosts"
+    )
+
+    parser.add_argument(
+        "--scan-all-ports",
+        action="store_true",
+        help="Scan ALL 1–65535 ports on active hosts (slow)"
     )
 
     args = parser.parse_args()
 
-    ports = [int(p) for p in args.ports.split(",")]
+    # Decide port list
+    if args.scan_all_ports:
+        ports = list(range(1, 65536))
+        scan_ports = True
+    elif args.scan_ports:
+        ports = [int(p) for p in args.ports.split(",")]
+        scan_ports = True
+    else:
+        ports = []
+        scan_ports = False
+
     targets = expand_targets(args.subnets)
 
     results = {
         "metadata": {
             "timestamp": utc_timestamp(),
             "mitre_attack": discovery_metadata(),
-            "scan_ports": args.scan_ports
+            "scan_ports": scan_ports,
+            "scan_all_ports": args.scan_all_ports
         },
         "hosts": {}
     }
@@ -114,7 +124,7 @@ def main():
                 host,
                 ports,
                 args.rate_limit,
-                args.scan_ports,
+                scan_ports,
                 args.verbose
             )
             for host in targets
